@@ -14,8 +14,6 @@ import (
 	"personal-knowledge-base/backend/internal/models"
 )
 
-const demoUserEmail = "demo@personal-knowledge-base.local"
-
 var ErrNoteNotFound = errors.New("note not found")
 
 const semanticSearchMaxDistance = 0.35
@@ -42,7 +40,7 @@ type BackfillEmbeddingsReport struct {
 }
 
 type noteDB interface {
-	queryRower
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error)
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
@@ -176,7 +174,7 @@ func (s *NoteStore) searchResultsWithDiagnostics(ctx context.Context, query stri
 }
 
 func (s *NoteStore) queryNotes(ctx context.Context, query string) ([]models.Note, error) {
-	userID, err := s.ensureDemoUser(ctx)
+	userID, err := UserIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +223,7 @@ func (s *NoteStore) querySemanticNotes(ctx context.Context, queryVector string, 
 }
 
 func (s *NoteStore) querySemanticResults(ctx context.Context, queryVector string, maxDistance float64) ([]models.SearchResult, error) {
-	userID, err := s.ensureDemoUser(ctx)
+	userID, err := UserIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -282,7 +280,7 @@ func (s *NoteStore) CreateNote(ctx context.Context, input CreateNoteInput) (mode
 		_ = tx.Rollback(ctx)
 	}()
 
-	userID, err := ensureDemoUserTx(ctx, tx)
+	userID, err := UserIDFromContext(ctx)
 	if err != nil {
 		return models.Note{}, err
 	}
@@ -323,7 +321,7 @@ func (s *NoteStore) UpdateNote(ctx context.Context, noteID uuid.UUID, input Upda
 		_ = tx.Rollback(ctx)
 	}()
 
-	userID, err := ensureDemoUserTx(ctx, tx)
+	userID, err := UserIDFromContext(ctx)
 	if err != nil {
 		return models.Note{}, err
 	}
@@ -353,7 +351,7 @@ func (s *NoteStore) UpdateNote(ctx context.Context, noteID uuid.UUID, input Upda
 }
 
 func (s *NoteStore) DeleteNote(ctx context.Context, noteID uuid.UUID) error {
-	userID, err := s.ensureDemoUser(ctx)
+	userID, err := UserIDFromContext(ctx)
 	if err != nil {
 		return err
 	}
@@ -411,27 +409,6 @@ func (s *NoteStore) BackfillMissingEmbeddings(ctx context.Context) (BackfillEmbe
 	}
 
 	return report, nil
-}
-
-func (s *NoteStore) ensureDemoUser(ctx context.Context) (uuid.UUID, error) {
-	return ensureDemoUserTx(ctx, s.db)
-}
-
-type queryRower interface {
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-}
-
-func ensureDemoUserTx(ctx context.Context, db queryRower) (uuid.UUID, error) {
-	var userID uuid.UUID
-	err := db.QueryRow(ctx, `
-		INSERT INTO users (email, password_hash)
-		VALUES ($1, $2)
-		ON CONFLICT (email)
-		DO UPDATE SET email = EXCLUDED.email
-		RETURNING id
-	`, demoUserEmail, "auth-not-enabled").Scan(&userID)
-
-	return userID, err
 }
 
 func normalizeTags(tags []string) []string {

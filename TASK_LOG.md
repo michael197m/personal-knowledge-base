@@ -172,6 +172,18 @@
   `embeddings.status` plus configured model in the health payload.
 - Updated the frontend backend-status card to render database and embeddings
   status so semantic fallback is visible from the UI.
+- Added JWT-based authentication with register/login endpoints:
+  - `POST /api/v1/auth/register`
+  - `POST /api/v1/auth/login`
+- Added auth middleware for note/search routes so API access now requires
+  `Authorization: Bearer <token>`.
+- Updated note storage access to use authenticated user ID from request context,
+  enabling real per-user note isolation instead of the previous demo-user
+  bootstrap.
+- Added frontend auth flow (register/login/logout), token persistence, and
+  authenticated API calls.
+- Added `TASKS.md` checklist to track recommended improvement items and marked
+  item 1 complete.
 
 ## How To Extend This Log
 

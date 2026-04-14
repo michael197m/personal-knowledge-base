@@ -14,9 +14,10 @@ import (
 )
 
 func TestNoteStoreIntegrationCreateAndListNotes(t *testing.T) {
-	ctx := context.Background()
-	pool := openIntegrationTestPool(t, ctx)
-	resetIntegrationDatabase(t, ctx, pool)
+	baseCtx := context.Background()
+	pool := openIntegrationTestPool(t, baseCtx)
+	resetIntegrationDatabase(t, baseCtx, pool)
+	ctx := integrationUserContext(t, baseCtx, pool, "integration+list@local.test")
 
 	store := NewNoteStore(pool)
 
@@ -54,20 +55,20 @@ func TestNoteStoreIntegrationCreateAndListNotes(t *testing.T) {
 		t.Fatalf("expected tags ordered from query, got %v", listed[0].Tags)
 	}
 
-	var userCount int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM users WHERE email = $1`, demoUserEmail).Scan(&userCount); err != nil {
-		t.Fatalf("count demo user: %v", err)
+	var noteCount int
+	if err := pool.QueryRow(baseCtx, `SELECT count(*) FROM notes`).Scan(&noteCount); err != nil {
+		t.Fatalf("count notes: %v", err)
 	}
-
-	if userCount != 1 {
-		t.Fatalf("expected exactly 1 demo user, got %d", userCount)
+	if noteCount != 1 {
+		t.Fatalf("expected 1 note in DB, got %d", noteCount)
 	}
 }
 
 func TestNoteStoreIntegrationListNotesOrdersNewestFirst(t *testing.T) {
-	ctx := context.Background()
-	pool := openIntegrationTestPool(t, ctx)
-	resetIntegrationDatabase(t, ctx, pool)
+	baseCtx := context.Background()
+	pool := openIntegrationTestPool(t, baseCtx)
+	resetIntegrationDatabase(t, baseCtx, pool)
+	ctx := integrationUserContext(t, baseCtx, pool, "integration+order@local.test")
 
 	store := NewNoteStore(pool)
 
@@ -104,9 +105,10 @@ func TestNoteStoreIntegrationListNotesOrdersNewestFirst(t *testing.T) {
 }
 
 func TestNoteStoreIntegrationUpdateNoteReplacesTags(t *testing.T) {
-	ctx := context.Background()
-	pool := openIntegrationTestPool(t, ctx)
-	resetIntegrationDatabase(t, ctx, pool)
+	baseCtx := context.Background()
+	pool := openIntegrationTestPool(t, baseCtx)
+	resetIntegrationDatabase(t, baseCtx, pool)
+	ctx := integrationUserContext(t, baseCtx, pool, "integration+update@local.test")
 
 	store := NewNoteStore(pool)
 
@@ -151,9 +153,10 @@ func TestNoteStoreIntegrationUpdateNoteReplacesTags(t *testing.T) {
 }
 
 func TestNoteStoreIntegrationDeleteNoteRemovesIt(t *testing.T) {
-	ctx := context.Background()
-	pool := openIntegrationTestPool(t, ctx)
-	resetIntegrationDatabase(t, ctx, pool)
+	baseCtx := context.Background()
+	pool := openIntegrationTestPool(t, baseCtx)
+	resetIntegrationDatabase(t, baseCtx, pool)
+	ctx := integrationUserContext(t, baseCtx, pool, "integration+delete@local.test")
 
 	store := NewNoteStore(pool)
 
@@ -185,9 +188,10 @@ func TestNoteStoreIntegrationDeleteNoteRemovesIt(t *testing.T) {
 }
 
 func TestNoteStoreIntegrationSearchNotesMatchesTitleContentAndTags(t *testing.T) {
-	ctx := context.Background()
-	pool := openIntegrationTestPool(t, ctx)
-	resetIntegrationDatabase(t, ctx, pool)
+	baseCtx := context.Background()
+	pool := openIntegrationTestPool(t, baseCtx)
+	resetIntegrationDatabase(t, baseCtx, pool)
+	ctx := integrationUserContext(t, baseCtx, pool, "integration+search@local.test")
 
 	store := NewNoteStore(pool)
 
@@ -239,9 +243,10 @@ func TestNoteStoreIntegrationSearchNotesMatchesTitleContentAndTags(t *testing.T)
 }
 
 func TestNoteStoreIntegrationSemanticSearchUsesVectorSimilarity(t *testing.T) {
-	ctx := context.Background()
-	pool := openIntegrationTestPool(t, ctx)
-	resetIntegrationDatabase(t, ctx, pool)
+	baseCtx := context.Background()
+	pool := openIntegrationTestPool(t, baseCtx)
+	resetIntegrationDatabase(t, baseCtx, pool)
+	ctx := integrationUserContext(t, baseCtx, pool, "integration+semantic@local.test")
 
 	store := NewNoteStore(pool)
 
@@ -289,6 +294,17 @@ func TestNoteStoreIntegrationSemanticSearchUsesVectorSimilarity(t *testing.T) {
 	if results[0].ID != first.ID {
 		t.Fatalf("expected first note to rank highest, got %s", results[0].ID)
 	}
+}
+
+func integrationUserContext(t *testing.T, ctx context.Context, pool *pgxpool.Pool, email string) context.Context {
+	t.Helper()
+
+	user, err := NewUserStore(pool).CreateUser(ctx, email, "integration-password-hash")
+	if err != nil {
+		t.Fatalf("create integration user: %v", err)
+	}
+
+	return ContextWithUserID(ctx, user.ID)
 }
 
 func unitVectorAt(index int) []float32 {

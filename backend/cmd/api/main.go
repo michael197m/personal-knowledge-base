@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"personal-knowledge-base/backend/internal/auth"
 	"personal-knowledge-base/backend/internal/config"
 	"personal-knowledge-base/backend/internal/embeddings"
 	internalhttp "personal-knowledge-base/backend/internal/http"
@@ -35,7 +36,15 @@ func main() {
 		)
 	}
 
-	app := internalhttp.NewServer(cfg, dbPool, store.NewNoteStore(dbPool, embedder), embedder)
+	authService := auth.NewService(cfg.JWTSecret, 24*time.Hour)
+	app := internalhttp.NewServer(
+		cfg,
+		dbPool,
+		store.NewNoteStore(dbPool, embedder),
+		store.NewUserStore(dbPool),
+		authService,
+		embedder,
+	)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.ServerPort,

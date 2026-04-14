@@ -191,22 +191,6 @@ func TestNormalizeTags(t *testing.T) {
 	}
 }
 
-func TestEnsureDemoUserTxReturnsID(t *testing.T) {
-	expectedID := uuid.MustParse("4451e179-d89f-462e-b5ce-123ad2b996c2")
-	rower := &mockDB{
-		queryRow: &mockRow{values: []any{expectedID}},
-	}
-
-	got, err := ensureDemoUserTx(context.Background(), rower)
-	if err != nil {
-		t.Fatalf("ensureDemoUserTx returned error: %v", err)
-	}
-
-	if got != expectedID {
-		t.Fatalf("expected %s, got %s", expectedID, got)
-	}
-}
-
 func TestListNotesReturnsAggregatedRows(t *testing.T) {
 	noteID := uuid.MustParse("f723fbea-f557-4d3f-96db-e838ad613fec")
 	userID := uuid.MustParse("5087d5b0-0ce0-46fd-b971-9e947f8db8c7")
@@ -226,7 +210,7 @@ func TestListNotesReturnsAggregatedRows(t *testing.T) {
 		},
 	}
 
-	got, err := store.ListNotes(context.Background())
+	got, err := store.ListNotes(ContextWithUserID(context.Background(), userID))
 	if err != nil {
 		t.Fatalf("ListNotes returned error: %v", err)
 	}
@@ -254,7 +238,6 @@ func TestCreateNoteNormalizesTagsAndReturnsCreatedNote(t *testing.T) {
 
 	tx := &mockTx{
 		queryRows: []*mockRow{
-			{values: []any{userID}},
 			{values: []any{noteID, createdAt, createdAt}},
 			{values: []any{tagOneID}},
 			{values: []any{tagTwoID}},
@@ -273,7 +256,7 @@ func TestCreateNoteNormalizesTagsAndReturnsCreatedNote(t *testing.T) {
 		},
 	}
 
-	got, err := store.CreateNote(context.Background(), CreateNoteInput{
+	got, err := store.CreateNote(ContextWithUserID(context.Background(), userID), CreateNoteInput{
 		Title:   "  Test title  ",
 		Content: "  Test content  ",
 		Tags:    []string{" go ", "", "go", "pgx"},
@@ -308,7 +291,7 @@ func TestCreateNoteBeginTxError(t *testing.T) {
 		},
 	}
 
-	_, err := store.CreateNote(context.Background(), CreateNoteInput{Title: "t", Content: "c"})
+	_, err := store.CreateNote(ContextWithUserID(context.Background(), uuid.New()), CreateNoteInput{Title: "t", Content: "c"})
 	if err == nil {
 		t.Fatal("expected CreateNote to return an error")
 	}
@@ -319,7 +302,6 @@ func TestUpdateNoteReturnsNotFound(t *testing.T) {
 	noteID := uuid.MustParse("db7f880a-f0f1-4827-a326-a6827fb26b70")
 	tx := &mockTx{
 		queryRows: []*mockRow{
-			{values: []any{userID}},
 			{err: pgx.ErrNoRows},
 		},
 	}
@@ -332,7 +314,7 @@ func TestUpdateNoteReturnsNotFound(t *testing.T) {
 		},
 	}
 
-	_, err := store.UpdateNote(context.Background(), noteID, UpdateNoteInput{Title: "t", Content: "c"})
+	_, err := store.UpdateNote(ContextWithUserID(context.Background(), userID), noteID, UpdateNoteInput{Title: "t", Content: "c"})
 	if !errors.Is(err, ErrNoteNotFound) {
 		t.Fatalf("expected ErrNoteNotFound, got %v", err)
 	}
@@ -348,7 +330,6 @@ func TestUpdateNoteReplacesTags(t *testing.T) {
 
 	tx := &mockTx{
 		queryRows: []*mockRow{
-			{values: []any{userID}},
 			{values: []any{createdAt, updatedAt}},
 			{values: []any{tagID}},
 		},
@@ -366,7 +347,7 @@ func TestUpdateNoteReplacesTags(t *testing.T) {
 		},
 	}
 
-	got, err := store.UpdateNote(context.Background(), noteID, UpdateNoteInput{
+	got, err := store.UpdateNote(ContextWithUserID(context.Background(), userID), noteID, UpdateNoteInput{
 		Title:   "  Updated  ",
 		Content: "  Changed  ",
 		Tags:    []string{" go ", "go"},
@@ -399,7 +380,7 @@ func TestDeleteNoteReturnsNotFound(t *testing.T) {
 		},
 	}
 
-	err := store.DeleteNote(context.Background(), uuid.MustParse("9579e453-5701-4f71-ac98-ae9ec8bff46e"))
+	err := store.DeleteNote(ContextWithUserID(context.Background(), userID), uuid.MustParse("9579e453-5701-4f71-ac98-ae9ec8bff46e"))
 	if !errors.Is(err, ErrNoteNotFound) {
 		t.Fatalf("expected ErrNoteNotFound, got %v", err)
 	}
@@ -416,7 +397,7 @@ func TestDeleteNoteDeletesExistingNote(t *testing.T) {
 		},
 	}
 
-	if err := store.DeleteNote(context.Background(), uuid.MustParse("761ec314-5a39-4cf9-91c4-c87e35cbc926")); err != nil {
+	if err := store.DeleteNote(ContextWithUserID(context.Background(), userID), uuid.MustParse("761ec314-5a39-4cf9-91c4-c87e35cbc926")); err != nil {
 		t.Fatalf("DeleteNote returned error: %v", err)
 	}
 }
@@ -431,7 +412,7 @@ func TestListNotesQueryError(t *testing.T) {
 		},
 	}
 
-	_, err := store.ListNotes(context.Background())
+	_, err := store.ListNotes(ContextWithUserID(context.Background(), uuid.New()))
 	if !errors.Is(err, io.EOF) {
 		t.Fatalf("expected io.EOF, got %v", err)
 	}
@@ -458,7 +439,7 @@ func TestSearchNotesUsesQueryFilter(t *testing.T) {
 		},
 	}
 
-	got, err := store.SearchNotes(context.Background(), "search")
+	got, err := store.SearchNotes(ContextWithUserID(context.Background(), userID), "search")
 	if err != nil {
 		t.Fatalf("SearchNotes returned error: %v", err)
 	}
@@ -500,7 +481,7 @@ func TestSearchNotesUsesSemanticQueryWhenEmbedderAvailable(t *testing.T) {
 		},
 	}
 
-	got, err := store.SearchNotes(context.Background(), "knowledge query")
+	got, err := store.SearchNotes(ContextWithUserID(context.Background(), userID), "knowledge query")
 	if err != nil {
 		t.Fatalf("SearchNotes returned error: %v", err)
 	}
@@ -537,7 +518,7 @@ func TestSearchNotesFallsBackToTextQueryWhenEmbeddingFails(t *testing.T) {
 		},
 	}
 
-	if _, err := store.SearchNotes(context.Background(), "fallback"); err != nil {
+	if _, err := store.SearchNotes(ContextWithUserID(context.Background(), userID), "fallback"); err != nil {
 		t.Fatalf("SearchNotes returned error: %v", err)
 	}
 
@@ -576,7 +557,7 @@ func TestSearchNotesFallsBackToTextQueryWhenSemanticSearchHasNoRelevantMatches(t
 		},
 	}
 
-	if _, err := store.SearchNotes(context.Background(), "fallback"); err != nil {
+	if _, err := store.SearchNotes(ContextWithUserID(context.Background(), userID), "fallback"); err != nil {
 		t.Fatalf("SearchNotes returned error: %v", err)
 	}
 
@@ -619,7 +600,7 @@ func TestSearchNoteResultsWithDiagnosticsReportsSemanticNoMatchFallback(t *testi
 		},
 	}
 
-	search, err := store.SearchNoteResultsWithDiagnostics(context.Background(), "fallback")
+	search, err := store.SearchNoteResultsWithDiagnostics(ContextWithUserID(context.Background(), userID), "fallback")
 	if err != nil {
 		t.Fatalf("SearchNoteResultsWithDiagnostics returned error: %v", err)
 	}
@@ -664,7 +645,7 @@ func TestSearchNoteResultsWithDiagnosticsReportsSemanticMode(t *testing.T) {
 		},
 	}
 
-	search, err := store.SearchNoteResultsWithDiagnostics(context.Background(), "semantic")
+	search, err := store.SearchNoteResultsWithDiagnostics(ContextWithUserID(context.Background(), userID), "semantic")
 	if err != nil {
 		t.Fatalf("SearchNoteResultsWithDiagnostics returned error: %v", err)
 	}

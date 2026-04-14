@@ -26,6 +26,24 @@ docker compose -f deploy/docker-compose.yml up --build
 4. The project Postgres container is published on host port `55432` to avoid
    collisions with any local Postgres already using `5432`.
 
+## Authentication
+
+- Notes and search endpoints are now authenticated and scoped per user.
+- Use the frontend auth form (login/register), or call:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"password123"}'
+```
+
+- Then pass the returned token:
+
+```bash
+curl http://localhost:8080/api/v1/notes \
+  -H "Authorization: Bearer <token>"
+```
+
 ## Backend Testing
 
 - Run the default backend test suite:
@@ -77,11 +95,11 @@ go run ./cmd/backfill_embeddings
 ## Notes
 
 - The current frontend supports note create, update, and delete flows against
-  the backend note API.
+  the backend note API with token-based authentication.
 - The current frontend also includes a search bar backed by
   `/api/v1/search?q=...`.
 - The backend currently provides health plus note list/create/update/delete
-  endpoints, plus a search endpoint.
+  endpoints, plus search and auth endpoints (`/auth/register`, `/auth/login`).
 - `/api/v1/health` now reports both database status and embedding-provider
   status (`ok`, `unavailable`, `unconfigured`) so semantic fallback behavior is
   easier to diagnose.

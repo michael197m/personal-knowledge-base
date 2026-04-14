@@ -26,6 +26,14 @@ export type CreateNoteInput = {
 
 export type UpdateNoteInput = CreateNoteInput;
 
+export type AuthResponse = {
+  token: string;
+  user: {
+    id: string;
+    email: string;
+  };
+};
+
 export type SearchResult = {
   note: Note;
   matchType: "list" | "semantic" | "text";

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"personal-knowledge-base/backend/internal/config"
@@ -20,14 +21,30 @@ type Server struct {
 	config    config.Config
 	db        *pgxpool.Pool
 	noteStore *store.NoteStore
+	userStore *store.UserStore
+	auth      authService
 	embedder  embeddingHealthChecker
 }
 
-func NewServer(cfg config.Config, db *pgxpool.Pool, noteStore *store.NoteStore, embedders ...embeddingHealthChecker) *Server {
+type authService interface {
+	GenerateToken(userID uuid.UUID) (string, error)
+	ParseToken(token string) (uuid.UUID, error)
+}
+
+func NewServer(
+	cfg config.Config,
+	db *pgxpool.Pool,
+	noteStore *store.NoteStore,
+	userStore *store.UserStore,
+	auth authService,
+	embedders ...embeddingHealthChecker,
+) *Server {
 	server := &Server{
 		config:    cfg,
 		db:        db,
 		noteStore: noteStore,
+		userStore: userStore,
+		auth:      auth,
 	}
 	if len(embedders) > 0 {
 		server.embedder = embedders[0]
@@ -40,13 +57,16 @@ func (s *Server) Router() http.Handler {
 	mux := http.NewServeMux()
 	healthHandler := handlers.NewHealthHandler(s.db, s.embedder)
 	noteHandler := handlers.NewNoteHandler(s.noteStore)
+	authHandler := handlers.NewAuthHandler(s.userStore, s.auth)
 
 	mux.HandleFunc("GET /api/v1/health", healthHandler.Get)
-	mux.HandleFunc("GET /api/v1/notes", noteHandler.List)
-	mux.HandleFunc("GET /api/v1/search", noteHandler.Search)
-	mux.HandleFunc("POST /api/v1/notes", noteHandler.Create)
-	mux.HandleFunc("PUT /api/v1/notes/{id}", noteHandler.Update)
-	mux.HandleFunc("DELETE /api/v1/notes/{id}", noteHandler.Delete)
+	mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
+	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
+	mux.Handle("GET /api/v1/notes", withAuth(s.auth, http.HandlerFunc(noteHandler.List)))
+	mux.Handle("GET /api/v1/search", withAuth(s.auth, http.HandlerFunc(noteHandler.Search)))
+	mux.Handle("POST /api/v1/notes", withAuth(s.auth, http.HandlerFunc(noteHandler.Create)))
+	mux.Handle("PUT /api/v1/notes/{id}", withAuth(s.auth, http.HandlerFunc(noteHandler.Update)))
+	mux.Handle("DELETE /api/v1/notes/{id}", withAuth(s.auth, http.HandlerFunc(noteHandler.Delete)))
 
 	return withCORS(mux)
 }

@@ -6,7 +6,10 @@ import {
   deleteNote,
   fetchHealth,
   fetchNotes,
+  login,
+  register,
   searchNotes,
+  setAuthToken,
   updateNote,
 } from "./lib/api";
 import type {
@@ -35,6 +38,11 @@ function statusClass(status: "ok" | "unavailable" | "unconfigured"): string {
 }
 
 export default function App() {
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authToken, setLocalAuthToken] = useState<string | null>(null);
+  const [authenticating, setAuthenticating] = useState(false);
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -46,11 +54,17 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    const existingToken = localStorage.getItem("pkb_auth_token");
+    if (existingToken) {
+      setLocalAuthToken(existingToken);
+      setAuthToken(existingToken);
+    }
+
     async function load() {
       try {
-      const [healthResponse, notesResponse] = await Promise.all([
+        const [healthResponse, notesResponse] = await Promise.all([
           fetchHealth(),
-          fetchNotes(),
+          existingToken ? fetchNotes() : Promise.resolve([]),
         ]);
         setHealth(healthResponse);
         setNotes(notesResponse);
@@ -65,7 +79,45 @@ export default function App() {
     void load();
   }, []);
 
+  async function handleAuthSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setAuthenticating(true);
+
+    try {
+      const response =
+        authMode === "register"
+          ? await register(authEmail, authPassword)
+          : await login(authEmail, authPassword);
+      setAuthToken(response.token);
+      setLocalAuthToken(response.token);
+      localStorage.setItem("pkb_auth_token", response.token);
+      const nextNotes = await fetchNotes();
+      setNotes(nextNotes);
+      setAuthPassword("");
+    } catch (authError) {
+      setError(authError instanceof Error ? authError.message : "Unknown error");
+    } finally {
+      setAuthenticating(false);
+    }
+  }
+
+  function handleLogout() {
+    setAuthToken(null);
+    setLocalAuthToken(null);
+    localStorage.removeItem("pkb_auth_token");
+    setNotes([]);
+    setSearchResults(null);
+    setSearchMode(false);
+    setEditingNote(null);
+  }
+
   async function handleSubmit(input: CreateNoteInput) {
+    if (!authToken) {
+      setError("Please login first.");
+      return;
+    }
+
     setError(null);
     setSubmitting(true);
 
@@ -84,6 +136,11 @@ export default function App() {
   }
 
   async function handleUpdate(input: UpdateNoteInput) {
+    if (!authToken) {
+      setError("Please login first.");
+      return;
+    }
+
     if (!editingNote) {
       return;
     }
@@ -116,6 +173,11 @@ export default function App() {
   }
 
   async function handleDelete(noteId: string) {
+    if (!authToken) {
+      setError("Please login first.");
+      return;
+    }
+
     setError(null);
     setDeletingNoteId(noteId);
 
@@ -140,6 +202,11 @@ export default function App() {
   }
 
   async function handleSearchSubmit(event: React.FormEvent<HTMLFormElement>) {
+    if (!authToken) {
+      setError("Please login first.");
+      return;
+    }
+
     event.preventDefault();
     setError(null);
 
@@ -163,6 +230,11 @@ export default function App() {
   }
 
   async function handleSearchClear() {
+    if (!authToken) {
+      setError("Please login first.");
+      return;
+    }
+
     setSearchQuery("");
     setSearchMode(false);
     setError(null);
@@ -202,6 +274,7 @@ export default function App() {
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Search notes by title, content, or tag"
+            disabled={!authToken}
           />
           <button type="submit" className="primary-button">
             Search
@@ -210,10 +283,45 @@ export default function App() {
             type="button"
             className="ghost-button"
             onClick={() => void handleSearchClear()}
+            disabled={!authToken}
           >
             Clear
           </button>
         </form>
+        {authToken ? (
+          <button type="button" className="ghost-button" onClick={handleLogout}>
+            Logout
+          </button>
+        ) : (
+          <form className="auth-form" onSubmit={(event) => void handleAuthSubmit(event)}>
+            <input
+              type="email"
+              placeholder="Email"
+              value={authEmail}
+              onChange={(event) => setAuthEmail(event.target.value)}
+              required
+            />
+            <input
+              type="password"
+              placeholder="Password (min 8 chars)"
+              value={authPassword}
+              onChange={(event) => setAuthPassword(event.target.value)}
+              minLength={8}
+              required
+            />
+            <button type="submit" className="primary-button" disabled={authenticating}>
+              {authenticating ? "Working..." : authMode === "register" ? "Create account" : "Login"}
+            </button>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => setAuthMode((current) => (current === "login" ? "register" : "login"))}
+              disabled={authenticating}
+            >
+              {authMode === "login" ? "Need an account?" : "Have an account?"}
+            </button>
+          </form>
+        )}
       </section>
 
       <section className="status-grid">
@@ -223,6 +331,9 @@ export default function App() {
             <>
               <p className="status ok">{health.status}</p>
               <p>{health.service}</p>
+              <p className={`status ${authToken ? "ok" : "warn"}`}>
+                Auth: {authToken ? "authenticated" : "not authenticated"}
+              </p>
               <p className={`status ${statusClass(health.database)}`}>
                 Database: {health.database}
               </p>
@@ -240,6 +351,11 @@ export default function App() {
         <article className="card">
           <h2>Notes</h2>
           <p className="status">{notes.length} persisted items</p>
+          {!authToken ? (
+            <p className="muted">
+              Login or create an account to access your own notes.
+            </p>
+          ) : null}
           {searchMode ? (
             <>
               <p className="search-summary">
@@ -288,6 +404,7 @@ export default function App() {
                   submitting={submitting}
                 />
               )}
+          {!authToken ? <p className="muted">Authentication is required to create notes.</p> : null}
           {editingNote ? (
             <button
               type="button"

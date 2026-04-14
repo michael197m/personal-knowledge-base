@@ -29,6 +29,8 @@ docker compose -f deploy/docker-compose.yml up --build
 ## Authentication
 
 - Notes and search endpoints are now authenticated and scoped per user.
+- Auth now uses an `HttpOnly` cookie (`pkb_auth_token`) instead of storing JWTs
+  in frontend storage.
 - Use the frontend auth form (login/register), or call:
 
 ```bash
@@ -40,9 +42,21 @@ curl -X POST http://localhost:8080/api/v1/auth/register \
 - Then pass the returned token:
 
 ```bash
-curl http://localhost:8080/api/v1/notes \
-  -H "Authorization: Bearer <token>"
+curl -i http://localhost:8080/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"password123"}'
 ```
+
+- Use the returned `Set-Cookie` value for protected endpoints when using CLI:
+
+```bash
+curl http://localhost:8080/api/v1/notes \
+  -H 'Cookie: pkb_auth_token=<token>'
+```
+
+- For production, run the frontend and backend behind HTTPS and set:
+  - `AUTH_COOKIE_SECURE=true`
+  - `FRONTEND_ORIGIN=https://<your-frontend-origin>`
 
 ## Backend Testing
 

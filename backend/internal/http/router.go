@@ -55,27 +55,42 @@ func NewServer(
 
 func (s *Server) Router() http.Handler {
 	mux := http.NewServeMux()
+	authCookieName := "pkb_auth_token"
 	healthHandler := handlers.NewHealthHandler(s.db, s.embedder)
 	noteHandler := handlers.NewNoteHandler(s.noteStore)
-	authHandler := handlers.NewAuthHandler(s.userStore, s.auth)
+	authHandler := handlers.NewAuthHandler(
+		s.userStore,
+		s.auth,
+		handlers.AuthCookieConfig{
+			Name:   authCookieName,
+			Secure: s.config.AuthCookieSecure,
+		},
+	)
 
 	mux.HandleFunc("GET /api/v1/health", healthHandler.Get)
 	mux.HandleFunc("POST /api/v1/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
-	mux.Handle("GET /api/v1/notes", withAuth(s.auth, http.HandlerFunc(noteHandler.List)))
-	mux.Handle("GET /api/v1/search", withAuth(s.auth, http.HandlerFunc(noteHandler.Search)))
-	mux.Handle("POST /api/v1/notes", withAuth(s.auth, http.HandlerFunc(noteHandler.Create)))
-	mux.Handle("PUT /api/v1/notes/{id}", withAuth(s.auth, http.HandlerFunc(noteHandler.Update)))
-	mux.Handle("DELETE /api/v1/notes/{id}", withAuth(s.auth, http.HandlerFunc(noteHandler.Delete)))
+	mux.HandleFunc("POST /api/v1/auth/logout", authHandler.Logout)
+	mux.Handle("GET /api/v1/notes", withAuth(s.auth, authCookieName, http.HandlerFunc(noteHandler.List)))
+	mux.Handle("GET /api/v1/search", withAuth(s.auth, authCookieName, http.HandlerFunc(noteHandler.Search)))
+	mux.Handle("POST /api/v1/notes", withAuth(s.auth, authCookieName, http.HandlerFunc(noteHandler.Create)))
+	mux.Handle("PUT /api/v1/notes/{id}", withAuth(s.auth, authCookieName, http.HandlerFunc(noteHandler.Update)))
+	mux.Handle("DELETE /api/v1/notes/{id}", withAuth(s.auth, authCookieName, http.HandlerFunc(noteHandler.Delete)))
 
-	return withCORS(mux)
+	return withCORS(mux, s.config.FrontendOrigin)
 }
 
-func withCORS(next http.Handler) http.Handler {
+func withCORS(next http.Handler, allowedOrigin string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+		} else if origin == allowedOrigin {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		}
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

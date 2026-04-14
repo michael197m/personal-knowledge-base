@@ -7,9 +7,9 @@ import {
   fetchHealth,
   fetchNotes,
   login,
+  logout,
   register,
   searchNotes,
-  setAuthToken,
   updateNote,
 } from "./lib/api";
 import type {
@@ -41,7 +41,7 @@ export default function App() {
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
-  const [authToken, setLocalAuthToken] = useState<string | null>(null);
+  const [authenticated, setAuthenticated] = useState(false);
   const [authenticating, setAuthenticating] = useState(false);
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -54,20 +54,22 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    const existingToken = localStorage.getItem("pkb_auth_token");
-    if (existingToken) {
-      setLocalAuthToken(existingToken);
-      setAuthToken(existingToken);
-    }
-
     async function load() {
       try {
-        const [healthResponse, notesResponse] = await Promise.all([
-          fetchHealth(),
-          existingToken ? fetchNotes() : Promise.resolve([]),
-        ]);
+        const healthResponse = await fetchHealth();
         setHealth(healthResponse);
-        setNotes(notesResponse);
+        try {
+          const notesResponse = await fetchNotes();
+          setAuthenticated(true);
+          setNotes(notesResponse);
+        } catch (notesError) {
+          if (notesError instanceof Error && notesError.message === "authentication required") {
+            setAuthenticated(false);
+            setNotes([]);
+          } else {
+            throw notesError;
+          }
+        }
         setSearchResults(null);
       } catch (loadError) {
         setError(
@@ -89,12 +91,11 @@ export default function App() {
         authMode === "register"
           ? await register(authEmail, authPassword)
           : await login(authEmail, authPassword);
-      setAuthToken(response.token);
-      setLocalAuthToken(response.token);
-      localStorage.setItem("pkb_auth_token", response.token);
       const nextNotes = await fetchNotes();
+      setAuthenticated(true);
       setNotes(nextNotes);
       setAuthPassword("");
+      setAuthEmail(response.user.email);
     } catch (authError) {
       setError(authError instanceof Error ? authError.message : "Unknown error");
     } finally {
@@ -102,18 +103,22 @@ export default function App() {
     }
   }
 
-  function handleLogout() {
-    setAuthToken(null);
-    setLocalAuthToken(null);
-    localStorage.removeItem("pkb_auth_token");
-    setNotes([]);
-    setSearchResults(null);
-    setSearchMode(false);
-    setEditingNote(null);
+  async function handleLogout() {
+    setError(null);
+    try {
+      await logout();
+      setAuthenticated(false);
+      setNotes([]);
+      setSearchResults(null);
+      setSearchMode(false);
+      setEditingNote(null);
+    } catch (logoutError) {
+      setError(logoutError instanceof Error ? logoutError.message : "Unknown error");
+    }
   }
 
   async function handleSubmit(input: CreateNoteInput) {
-    if (!authToken) {
+    if (!authenticated) {
       setError("Please login first.");
       return;
     }
@@ -136,7 +141,7 @@ export default function App() {
   }
 
   async function handleUpdate(input: UpdateNoteInput) {
-    if (!authToken) {
+    if (!authenticated) {
       setError("Please login first.");
       return;
     }
@@ -173,7 +178,7 @@ export default function App() {
   }
 
   async function handleDelete(noteId: string) {
-    if (!authToken) {
+    if (!authenticated) {
       setError("Please login first.");
       return;
     }
@@ -202,7 +207,7 @@ export default function App() {
   }
 
   async function handleSearchSubmit(event: React.FormEvent<HTMLFormElement>) {
-    if (!authToken) {
+    if (!authenticated) {
       setError("Please login first.");
       return;
     }
@@ -230,7 +235,7 @@ export default function App() {
   }
 
   async function handleSearchClear() {
-    if (!authToken) {
+    if (!authenticated) {
       setError("Please login first.");
       return;
     }
@@ -274,7 +279,7 @@ export default function App() {
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Search notes by title, content, or tag"
-            disabled={!authToken}
+            disabled={!authenticated}
           />
           <button type="submit" className="primary-button">
             Search
@@ -283,13 +288,13 @@ export default function App() {
             type="button"
             className="ghost-button"
             onClick={() => void handleSearchClear()}
-            disabled={!authToken}
+            disabled={!authenticated}
           >
             Clear
           </button>
         </form>
-        {authToken ? (
-          <button type="button" className="ghost-button" onClick={handleLogout}>
+        {authenticated ? (
+          <button type="button" className="ghost-button" onClick={() => void handleLogout()}>
             Logout
           </button>
         ) : (
@@ -331,8 +336,8 @@ export default function App() {
             <>
               <p className="status ok">{health.status}</p>
               <p>{health.service}</p>
-              <p className={`status ${authToken ? "ok" : "warn"}`}>
-                Auth: {authToken ? "authenticated" : "not authenticated"}
+              <p className={`status ${authenticated ? "ok" : "warn"}`}>
+                Auth: {authenticated ? "authenticated" : "not authenticated"}
               </p>
               <p className={`status ${statusClass(health.database)}`}>
                 Database: {health.database}
@@ -351,7 +356,7 @@ export default function App() {
         <article className="card">
           <h2>Notes</h2>
           <p className="status">{notes.length} persisted items</p>
-          {!authToken ? (
+          {!authenticated ? (
             <p className="muted">
               Login or create an account to access your own notes.
             </p>
@@ -404,7 +409,7 @@ export default function App() {
                   submitting={submitting}
                 />
               )}
-          {!authToken ? <p className="muted">Authentication is required to create notes.</p> : null}
+          {!authenticated ? <p className="muted">Authentication is required to create notes.</p> : null}
           {editingNote ? (
             <button
               type="button"

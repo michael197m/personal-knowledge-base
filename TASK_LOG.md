@@ -184,6 +184,14 @@
   authenticated API calls.
 - Added `TASKS.md` checklist to track recommended improvement items and marked
   item 1 complete.
+- Switched frontend auth from localStorage token handling to cookie-based auth
+  (`HttpOnly` cookie set by backend).
+- Added backend logout endpoint (`POST /api/v1/auth/logout`) to clear auth
+  cookie.
+- Updated auth middleware to accept the auth cookie first (with Authorization
+  header fallback for CLI/manual requests).
+- Updated CORS policy to support credentialed requests and configured
+  `FRONTEND_ORIGIN`/`AUTH_COOKIE_SECURE` environment settings.
 
 ## How To Extend This Log
 

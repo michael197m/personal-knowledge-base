@@ -22,9 +22,15 @@ type tokenService interface {
 	GenerateToken(userID uuid.UUID) (string, error)
 }
 
+type AuthCookieConfig struct {
+	Name   string
+	Secure bool
+}
+
 type AuthHandler struct {
-	users  userAuthStore
-	tokens tokenService
+	users        userAuthStore
+	tokens       tokenService
+	cookieConfig AuthCookieConfig
 }
 
 type authRequest struct {
@@ -33,17 +39,21 @@ type authRequest struct {
 }
 
 type authResponse struct {
-	Token string `json:"token"`
-	User  struct {
+	User struct {
 		ID    uuid.UUID `json:"id"`
 		Email string    `json:"email"`
 	} `json:"user"`
 }
 
-func NewAuthHandler(users userAuthStore, tokens tokenService) *AuthHandler {
+func NewAuthHandler(users userAuthStore, tokens tokenService, cookieConfig AuthCookieConfig) *AuthHandler {
+	if cookieConfig.Name == "" {
+		cookieConfig.Name = "pkb_auth_token"
+	}
+
 	return &AuthHandler{
-		users:  users,
-		tokens: tokens,
+		users:        users,
+		tokens:       tokens,
+		cookieConfig: cookieConfig,
 	}
 }
 
@@ -77,7 +87,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusCreated, makeAuthResponse(user.ID, user.Email, token))
+	h.setAuthCookie(w, token)
+	respondJSON(w, http.StatusCreated, makeAuthResponse(user.ID, user.Email))
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +120,22 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, makeAuthResponse(user.ID, user.Email, token))
+	h.setAuthCookie(w, token)
+	respondJSON(w, http.StatusOK, makeAuthResponse(user.ID, user.Email))
+}
+
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     h.cookieConfig.Name,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   h.cookieConfig.Secure,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+	})
+
+	respondJSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
 }
 
 func decodeAndValidateAuthRequest(r *http.Request) (authRequest, error) {
@@ -131,9 +157,21 @@ func decodeAndValidateAuthRequest(r *http.Request) (authRequest, error) {
 	return req, nil
 }
 
-func makeAuthResponse(userID uuid.UUID, email, token string) authResponse {
-	response := authResponse{Token: token}
+func makeAuthResponse(userID uuid.UUID, email string) authResponse {
+	response := authResponse{}
 	response.User.ID = userID
 	response.User.Email = email
 	return response
+}
+
+func (h *AuthHandler) setAuthCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     h.cookieConfig.Name,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   h.cookieConfig.Secure,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   60 * 60 * 24,
+	})
 }

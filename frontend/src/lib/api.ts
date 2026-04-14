@@ -10,20 +10,6 @@ import type {
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/api/v1";
 
-let authToken: string | null = null;
-
-export function setAuthToken(token: string | null) {
-  authToken = token;
-}
-
-function authHeaders(): HeadersInit {
-  if (!authToken) {
-    return {};
-  }
-
-  return { Authorization: `Bearer ${authToken}` };
-}
-
 export async function fetchHealth(): Promise<HealthResponse> {
   const response = await fetch(`${API_BASE_URL}/health`);
 
@@ -36,10 +22,13 @@ export async function fetchHealth(): Promise<HealthResponse> {
 
 export async function fetchNotes(): Promise<Note[]> {
   const response = await fetch(`${API_BASE_URL}/notes`, {
-    headers: authHeaders(),
+    credentials: "include",
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("authentication required");
+    }
     throw new Error("Unable to fetch notes.");
   }
 
@@ -51,11 +40,14 @@ export async function searchNotes(query: string): Promise<SearchResult[]> {
   const response = await fetch(
     `${API_BASE_URL}/search?q=${encodeURIComponent(query)}`,
     {
-      headers: authHeaders(),
+      credentials: "include",
     },
   );
 
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("authentication required");
+    }
     throw new Error("Unable to search notes.");
   }
 
@@ -66,14 +58,17 @@ export async function searchNotes(query: string): Promise<SearchResult[]> {
 export async function createNote(input: CreateNoteInput): Promise<Note> {
   const response = await fetch(`${API_BASE_URL}/notes`, {
     method: "POST",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...authHeaders(),
     },
     body: JSON.stringify(input),
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("authentication required");
+    }
     throw new Error("Unable to create note.");
   }
 
@@ -86,14 +81,17 @@ export async function updateNote(
 ): Promise<Note> {
   const response = await fetch(`${API_BASE_URL}/notes/${noteId}`, {
     method: "PUT",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...authHeaders(),
     },
     body: JSON.stringify(input),
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("authentication required");
+    }
     throw new Error("Unable to update note.");
   }
 
@@ -103,10 +101,13 @@ export async function updateNote(
 export async function deleteNote(noteId: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/notes/${noteId}`, {
     method: "DELETE",
-    headers: authHeaders(),
+    credentials: "include",
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("authentication required");
+    }
     throw new Error("Unable to delete note.");
   }
 }
@@ -117,6 +118,7 @@ export async function register(
 ): Promise<AuthResponse> {
   const response = await fetch(`${API_BASE_URL}/auth/register`, {
     method: "POST",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },
@@ -137,6 +139,7 @@ export async function login(
 ): Promise<AuthResponse> {
   const response = await fetch(`${API_BASE_URL}/auth/login`, {
     method: "POST",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },
@@ -149,4 +152,15 @@ export async function login(
   }
 
   return response.json() as Promise<AuthResponse>;
+}
+
+export async function logout(): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to logout.");
+  }
 }

@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -13,6 +14,8 @@ type Config struct {
 	PostgresDB       string
 	PostgresUser     string
 	PostgresPassword string
+	FrontendOrigin   string
+	AuthCookieSecure bool
 	JWTSecret        string
 	OllamaBaseURL    string
 	OllamaEmbedModel string
@@ -27,6 +30,8 @@ func Load() Config {
 		PostgresDB:       getEnv("POSTGRES_DB", "knowledge_base"),
 		PostgresUser:     getEnv("POSTGRES_USER", "kb_user"),
 		PostgresPassword: getEnv("POSTGRES_PASSWORD", "kb_password"),
+		FrontendOrigin:   getEnv("FRONTEND_ORIGIN", "http://localhost:5173"),
+		AuthCookieSecure: getBoolEnv("AUTH_COOKIE_SECURE", false),
 		JWTSecret:        getEnv("JWT_SECRET", "change-me"),
 		OllamaBaseURL:    getEnv("OLLAMA_BASE_URL", ""),
 		OllamaEmbedModel: getEnv("OLLAMA_EMBED_MODEL", "nomic-embed-text"),
@@ -62,4 +67,16 @@ func getDurationEnv(key string, fallback time.Duration) time.Duration {
 	}
 
 	return fallback
+}
+
+func getBoolEnv(key string, fallback bool) bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	switch value {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
 }

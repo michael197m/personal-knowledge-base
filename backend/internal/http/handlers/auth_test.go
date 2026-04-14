@@ -70,6 +70,7 @@ func TestAuthHandlerRegisterReturnsCreatedUser(t *testing.T) {
 				return "signed-token", nil
 			},
 		},
+		AuthCookieConfig{Name: "pkb_auth_token"},
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(`{"email":"User@Example.com","password":"password123"}`))
@@ -86,8 +87,16 @@ func TestAuthHandlerRegisterReturnsCreatedUser(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 
-	if payload["token"] != "signed-token" {
-		t.Fatalf("unexpected token payload: %#v", payload)
+	if payload["token"] != nil {
+		t.Fatalf("response should not include token field: %#v", payload)
+	}
+
+	cookie := rec.Result().Cookies()[0]
+	if cookie.Name != "pkb_auth_token" || cookie.Value != "signed-token" {
+		t.Fatalf("unexpected auth cookie: %#v", cookie)
+	}
+	if !cookie.HttpOnly {
+		t.Fatal("expected auth cookie to be HttpOnly")
 	}
 }
 
@@ -99,6 +108,7 @@ func TestAuthHandlerRegisterRejectsDuplicateUser(t *testing.T) {
 			},
 		},
 		&mockTokenService{},
+		AuthCookieConfig{Name: "pkb_auth_token"},
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(`{"email":"user@example.com","password":"password123"}`))
@@ -119,6 +129,7 @@ func TestAuthHandlerLoginRejectsInvalidCredentials(t *testing.T) {
 			},
 		},
 		&mockTokenService{},
+		AuthCookieConfig{Name: "pkb_auth_token"},
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString(`{"email":"user@example.com","password":"password123"}`))
@@ -157,6 +168,7 @@ func TestAuthHandlerLoginReturnsToken(t *testing.T) {
 				return "login-token", nil
 			},
 		},
+		AuthCookieConfig{Name: "pkb_auth_token"},
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBufferString(`{"email":"user@example.com","password":"password"}`))
@@ -173,8 +185,13 @@ func TestAuthHandlerLoginReturnsToken(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 
-	if payload["token"] != "login-token" {
-		t.Fatalf("unexpected token payload: %#v", payload)
+	if payload["token"] != nil {
+		t.Fatalf("response should not include token field: %#v", payload)
+	}
+
+	cookie := rec.Result().Cookies()[0]
+	if cookie.Name != "pkb_auth_token" || cookie.Value != "login-token" {
+		t.Fatalf("unexpected auth cookie: %#v", cookie)
 	}
 }
 
@@ -186,6 +203,7 @@ func TestAuthHandlerRejectsInvalidPayload(t *testing.T) {
 				return "", errors.New("should not be called")
 			},
 		},
+		AuthCookieConfig{Name: "pkb_auth_token"},
 	)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewBufferString(`{"email":"bad","password":"short"}`))
@@ -195,5 +213,29 @@ func TestAuthHandlerRejectsInvalidPayload(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestAuthHandlerLogoutClearsCookie(t *testing.T) {
+	handler := NewAuthHandler(
+		&mockUserAuthStore{},
+		&mockTokenService{},
+		AuthCookieConfig{Name: "pkb_auth_token"},
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	rec := httptest.NewRecorder()
+	handler.Logout(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	cookie := rec.Result().Cookies()[0]
+	if cookie.Name != "pkb_auth_token" {
+		t.Fatalf("unexpected cookie name: %s", cookie.Name)
+	}
+	if cookie.MaxAge != -1 {
+		t.Fatalf("expected cookie max-age -1, got %d", cookie.MaxAge)
 	}
 }

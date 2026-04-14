@@ -13,17 +13,24 @@ type tokenVerifier interface {
 	ParseToken(token string) (uuid.UUID, error)
 }
 
-func withAuth(verifier tokenVerifier, next http.Handler) http.Handler {
+func withAuth(verifier tokenVerifier, cookieName string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		const bearerPrefix = "Bearer "
 
-		authorizationHeader := strings.TrimSpace(r.Header.Get("Authorization"))
-		if !strings.HasPrefix(authorizationHeader, bearerPrefix) {
-			writeUnauthorized(w)
-			return
+		var token string
+		if cookie, err := r.Cookie(cookieName); err == nil && strings.TrimSpace(cookie.Value) != "" {
+			token = strings.TrimSpace(cookie.Value)
 		}
 
-		token := strings.TrimSpace(strings.TrimPrefix(authorizationHeader, bearerPrefix))
+		if token == "" {
+			authorizationHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+			if !strings.HasPrefix(authorizationHeader, bearerPrefix) {
+				writeUnauthorized(w)
+				return
+			}
+
+			token = strings.TrimSpace(strings.TrimPrefix(authorizationHeader, bearerPrefix))
+		}
 		if token == "" {
 			writeUnauthorized(w)
 			return

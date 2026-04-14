@@ -32,6 +32,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-kb_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kb_password}
       JWT_SECRET: ${JWT_SECRET:-change-me}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL_DOCKER:-http://host.docker.internal:11434}
       OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
       OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-15s}

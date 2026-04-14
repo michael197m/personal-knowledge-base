@@ -27,7 +27,6 @@ export type CreateNoteInput = {
 export type UpdateNoteInput = CreateNoteInput;
 
 export type AuthResponse = {
-  token: string;
   user: {
     id: string;
     email: string;

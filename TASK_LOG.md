@@ -166,6 +166,12 @@
   embeddings for existing notes that still have `NULL` vectors.
 - Added store unit tests for embedding backfill behavior (success, partial
   failures, and embedder-unconfigured guard).
+- Extended `/api/v1/health` to include embedding-provider health alongside
+  database health.
+- Added Ollama health probing (`GET /api/tags`) and tests, and surfaced
+  `embeddings.status` plus configured model in the health payload.
+- Updated the frontend backend-status card to render database and embeddings
+  status so semantic fallback is visible from the UI.
 
 ## How To Extend This Log
 

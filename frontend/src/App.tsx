@@ -23,6 +23,17 @@ const seedHighlights = [
   "Local embeddings with Ollama",
 ];
 
+function statusClass(status: "ok" | "unavailable" | "unconfigured"): string {
+  if (status === "ok") {
+    return "ok";
+  }
+  if (status === "unconfigured") {
+    return "warn";
+  }
+
+  return "bad";
+}
+
 export default function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -212,6 +223,13 @@ export default function App() {
             <>
               <p className="status ok">{health.status}</p>
               <p>{health.service}</p>
+              <p className={`status ${statusClass(health.database)}`}>
+                Database: {health.database}
+              </p>
+              <p className={`status ${statusClass(health.embeddings.status)}`}>
+                Embeddings: {health.embeddings.status}
+                {health.embeddings.model ? ` (${health.embeddings.model})` : ""}
+              </p>
               <p className="muted">{health.timestamp}</p>
             </>
           ) : (

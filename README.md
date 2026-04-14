@@ -82,6 +82,9 @@ go run ./cmd/backfill_embeddings
   `/api/v1/search?q=...`.
 - The backend currently provides health plus note list/create/update/delete
   endpoints, plus a search endpoint.
+- `/api/v1/health` now reports both database status and embedding-provider
+  status (`ok`, `unavailable`, `unconfigured`) so semantic fallback behavior is
+  easier to diagnose.
 - When Ollama is configured, note create/update operations also attempt to
   generate and persist embeddings using `nomic-embed-text`.
 - When embeddings exist, `/api/v1/search` uses pgvector cosine similarity for

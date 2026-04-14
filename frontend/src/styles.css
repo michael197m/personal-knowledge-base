@@ -169,6 +169,14 @@ textarea {
   color: #97f0b6;
 }
 
+.status.warn {
+  color: #ffcf9f;
+}
+
+.status.bad {
+  color: #ffb4ab;
+}
+
 .search-summary {
   margin: 0.35rem 0;
   color: #ffcf9f;

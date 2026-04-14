@@ -61,3 +61,25 @@ func TestOllamaClientEmbed(t *testing.T) {
 		t.Fatalf("unexpected embedding vector: %v", vector)
 	}
 }
+
+func TestOllamaClientHealth(t *testing.T) {
+	client := NewOllamaClient("http://ollama.test", "nomic-embed-text", 2*time.Second)
+	client.httpClient = &http.Client{
+		Timeout: 2 * time.Second,
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if r.URL.Path != "/api/tags" {
+				t.Fatalf("expected /api/tags, got %q", r.URL.Path)
+			}
+
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader(nil)),
+				Header:     make(http.Header),
+			}, nil
+		}),
+	}
+
+	if err := client.Health(context.Background()); err != nil {
+		t.Fatalf("Health returned error: %v", err)
+	}
+}

@@ -35,7 +35,7 @@ func main() {
 		)
 	}
 
-	app := internalhttp.NewServer(cfg, dbPool, store.NewNoteStore(dbPool, embedder))
+	app := internalhttp.NewServer(cfg, dbPool, store.NewNoteStore(dbPool, embedder), embedder)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.ServerPort,

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -10,23 +11,34 @@ import (
 	"personal-knowledge-base/backend/internal/store"
 )
 
+type embeddingHealthChecker interface {
+	Health(ctx context.Context) error
+	Model() string
+}
+
 type Server struct {
 	config    config.Config
 	db        *pgxpool.Pool
 	noteStore *store.NoteStore
+	embedder  embeddingHealthChecker
 }
 
-func NewServer(cfg config.Config, db *pgxpool.Pool, noteStore *store.NoteStore) *Server {
-	return &Server{
+func NewServer(cfg config.Config, db *pgxpool.Pool, noteStore *store.NoteStore, embedders ...embeddingHealthChecker) *Server {
+	server := &Server{
 		config:    cfg,
 		db:        db,
 		noteStore: noteStore,
 	}
+	if len(embedders) > 0 {
+		server.embedder = embedders[0]
+	}
+
+	return server
 }
 
 func (s *Server) Router() http.Handler {
 	mux := http.NewServeMux()
-	healthHandler := handlers.NewHealthHandler(s.db)
+	healthHandler := handlers.NewHealthHandler(s.db, s.embedder)
 	noteHandler := handlers.NewNoteHandler(s.noteStore)
 
 	mux.HandleFunc("GET /api/v1/health", healthHandler.Get)

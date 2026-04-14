@@ -76,3 +76,31 @@ func (c *OllamaClient) Embed(ctx context.Context, input string) ([]float32, erro
 
 	return payload.Embeddings[0], nil
 }
+
+func (c *OllamaClient) Health(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		c.baseURL+"/api/tags",
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("ollama health returned status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+func (c *OllamaClient) Model() string {
+	return c.model
+}

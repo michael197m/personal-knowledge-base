@@ -11,6 +11,11 @@ export type HealthResponse = {
   status: string;
   service: string;
   timestamp: string;
+  database: "ok" | "unavailable";
+  embeddings: {
+    status: "ok" | "unavailable" | "unconfigured";
+    model?: string;
+  };
 };
 
 export type CreateNoteInput = {

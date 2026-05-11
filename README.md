@@ -1,7 +1,7 @@
 # Personal Knowledge Base
 
 Personal note-taking and semantic search application scaffolded for a React +
-TypeScript frontend, Go backend, and PostgreSQL with `pgvector`.
+TypeScript frontend, Go backend, and PostgreSQL with `pgvector`
 
 ## Structure
 
